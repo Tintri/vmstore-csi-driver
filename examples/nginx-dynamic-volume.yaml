@@ -1,0 +1,60 @@
+# --------------------------------------
+# vmstore CSI Driver - Storage Class
+# --------------------------------------
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vmstore-csi-file-driver-sc
+provisioner: vmstore.csi.tintri.com
+allowVolumeExpansion: true
+parameters:
+  #mountPoint: /tintri-sc
+  #dataIp: 172.30.230.55
+  #vmstoreFS: /nfsv41
+  #mountOptions: vers=4.1
+---
+
+# ------------------------------------------------
+# VMstore CSI Driver - Persistent Volume Claim
+# ------------------------------------------------
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vmstore-csi-file-driver-pvc
+spec:
+  storageClassName: vmstore-csi-file-driver-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+
+# ---------
+# Nginx pod
+# ---------
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-dynamic-volume
+spec:
+  securityContext:
+    runAsUser: 1001
+  containers:
+    - image: nginxinc/nginx-unprivileged
+      imagePullPolicy: IfNotPresent
+      name: nginx
+      ports:
+        - containerPort: 80
+          protocol: TCP
+      volumeMounts:
+        - mountPath: /data
+          name: vmstore-csi-file-driver-data
+  volumes:
+    - name: vmstore-csi-file-driver-data
+      persistentVolumeClaim:
+        claimName: vmstore-csi-file-driver-pvc
+        readOnly: false

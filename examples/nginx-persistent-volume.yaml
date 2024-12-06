@@ -1,0 +1,91 @@
+# Nginx pod with pre provisioned storage using vmstore CSI driver
+#
+# $ kubectl apply -f examples/nginx-persistent-volume.yaml
+#
+
+
+# --------------------------------------
+# vmstore CSI Driver - Storage Class
+# --------------------------------------
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vmstore-csi-file-driver-sc-nginx-persistent
+provisioner: vmstore.csi.tintri.com
+allowVolumeExpansion: true
+---
+
+
+# ------------------------------------------
+# vmstore CSI Driver - Persistent Volume
+# ------------------------------------------
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: vmstore-csi-file-driver-pv-nginx-persistent
+  labels:
+    name: vmstore-csi-file-driver-pv-nginx-persistent
+spec:
+  storageClassName: vmstore-csi-file-driver-sc-nginx-persistent
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 1Gi
+  csi:
+    driver: vmstore.csi.tintri.com
+    volumeHandle: vmstore1/172.30.230.128:/tintri/csi/vmstorefs-mnt/persistent/volumefile-persistent.img
+    volumeAttributes:         # volumeAttributes are the alternative of storageClass params for static (precreated) volumes.
+      # mountOptions: ro, noflock # list of options for `mount` command
+      # dataIp: "172.30.200.37"   # Overrides vmstoreFS value from config. Use this to support multiple vmstore filesystems.
+      # bindMount: "false"       # Determines, whether volume will bind mounted or as a separate lustre mount.
+---
+
+# ------------------------------------------------
+# vmstore CSI Driver - Persistent Volume Claim
+# ------------------------------------------------
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vmstore-csi-file-driver-pvc-nginx-persistent
+spec:
+  storageClassName: vmstore-csi-file-driver-sc-nginx-persistent
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  selector:
+    matchLabels:
+      # to create 1-1 relationship for pod - persistent volume use unique labels
+      name: vmstore-csi-file-driver-pv-nginx-persistent
+---
+
+# ---------
+# Nginx pod
+# ---------
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-persistent-volume
+spec:
+  # securityContext:
+  #   runAsUser: 1001
+  containers:
+    - image: nginxinc/nginx-unprivileged
+      imagePullPolicy: IfNotPresent
+      name: nginx
+      ports:
+        - containerPort: 80
+          protocol: TCP
+      volumeMounts:
+        - mountPath: /usr/share/nginx/html
+          name: vmstore-csi-file-driver-data
+  volumes:
+    - name: vmstore-csi-file-driver-data
+      persistentVolumeClaim:
+        claimName: vmstore-csi-file-driver-pvc-nginx-persistent
+        readOnly: false

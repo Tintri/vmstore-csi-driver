@@ -1,0 +1,49 @@
+# ------------------------------------------------
+# Vmstore CSI Driver - Persistent Volume Claim
+# ------------------------------------------------
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vmstore-csi-file-driver-pvc-from-persistent-snapshot-1
+spec:
+  storageClassName: vmstore-csi-file-driver-sc-nginx-persistent
+  dataSource:
+    kind: VolumeSnapshot
+    apiGroup: snapshot.storage.k8s.io
+    name: snapshot-from-persistent
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 3Gi
+---
+
+# ---------
+# Nginx pod
+# ---------
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-dynamic-volume-from-snapshot
+spec:
+  securityContext:
+    runAsUser: 1001
+  containers:
+    - image: nginxinc/nginx-unprivileged
+      imagePullPolicy: IfNotPresent
+      name: nginx
+      command: [ "/bin/bash", "-c", "--" ]
+      args: [ "while true; do echo $(date) > /data/timefile; sleep 5; sync; done;" ]
+      ports:
+        - containerPort: 80
+          protocol: TCP
+      volumeMounts:
+        - mountPath: /data
+          name: vmstore-csi-file-driver-data
+  volumes:
+    - name: vmstore-csi-file-driver-data
+      persistentVolumeClaim:
+        claimName: vmstore-csi-file-driver-pvc-from-persistent-snapshot-1
+        readOnly: false

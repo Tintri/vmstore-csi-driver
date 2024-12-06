@@ -1,0 +1,81 @@
+# --------------------------------------
+# vmstore CSI Driver - Storage Class
+# --------------------------------------
+
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: vmstore-csi-file-driver-sc
+provisioner: vmstore.csi.tintri.com
+allowVolumeExpansion: true
+allowedTopologies:
+- matchLabelExpressions:
+  - key: topology.vmstore.csi.tintri.com/zone
+    values:
+    - zone-1
+parameters:
+  # vmstoreMountUid: "1001"          # Uid which will be used to access the volume in pod. Should be synced between vmstore server and clients.
+  # bindMount: "false"
+  # vmstoreFS: "/tintri/fs"          # Overrides vmstoreFS value from config.
+---
+
+# ------------------------------------------------
+# VMstore CSI Driver - Persistent Volume Claim
+# ------------------------------------------------
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vmstore-csi-file-driver-pvc
+spec:
+  storageClassName: vmstore-csi-file-driver-sc
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+
+# ---------
+# Nginx pod
+# ---------
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-dynamic-volume
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: topology.vmstore.csi.tintri.com/zone
+            operator: In
+            values:
+            - zone-1
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: another-node-label-key
+            operator: In
+            values:
+            - another-node-label-value
+  securityContext:
+    runAsUser: 1001
+  containers:
+    - image: nginxinc/nginx-unprivileged
+      imagePullPolicy: IfNotPresent
+      name: nginx
+      ports:
+        - containerPort: 80
+          protocol: TCP
+      volumeMounts:
+        - mountPath: /data
+          name: vmstore-csi-file-driver-data
+  volumes:
+    - name: vmstore-csi-file-driver-data
+      persistentVolumeClaim:
+        claimName: vmstore-csi-file-driver-pvc
+        readOnly: false

@@ -1,0 +1,26 @@
+# vmstore-csi-file-driver config file to create k8s secret
+#
+#$ kubectl create secret generic vmstore-csi-file-driver-config --from-file=deploy/kubernetes/vmstore-csi-file-driver-config.yaml
+#
+
+vmstore_map:
+  # vmstore1:
+  #   mountPoint: /tintri-csi                                     # mountpoint on the host where the tintri fs will be mounted
+  #   dataIp: 172.30.200.37
+  #   managementAddress: tafzq23.tintri.com
+  #   vmstoreFS: /tintri/testfs
+  #   # zone: zone-1
+  #   username: admin
+  #   password: Tintri99!
+
+  vmstore2:
+    mountPoint: /tintri-csi                                     # mountpoint on the host where the tintri fs will be mounted
+    dataIp: 10.136.40.71
+    managementAddress: tafbm05.tintri.com
+    vmstoreFS: /tintri/csi
+    # zone: zone-1
+    username: admin
+    password: tintri99
+
+
+debug: true                                                 # more logs
