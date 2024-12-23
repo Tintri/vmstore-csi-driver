@@ -21,6 +21,11 @@ Releases can be found here - https://github.com/Tintri/vmstore-csi-driver/releas
 |ReadOnlyMany| >=1.0.0 |
 |ReadWriteOncePod| >=1.0.0 |
 
+## Compatibility matrix
+|CSI driver version| VMstore version|
+|--- |--- |
+|v1.0.1| >=5.6.0.1 |
+
 ## Requirements
 
 - Kubernetes cluster must allow privileged pods, this flag must be set for the API server and the kubelet
