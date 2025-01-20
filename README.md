@@ -41,11 +41,11 @@ For example `tintri/csi`.
 ## Installation
 Clone or untar driver (depending on where you get the driver)
 ```bash
-git clone -b <driver version> https://bitbucket.eng-us.tegile.com/scm/eco/vmstore-csi-file-driver.git
+git clone -b <driver version> https://github.com/Tintri/vmstore-csi-driver.git
 ```
 e.g:-
 ```bash
-git clone -b 1.0.0 https://bitbucket.eng-us.tegile.com/scm/eco/vmstore-csi-file-driver.git
+git clone -b 1.0.1 https://github.com/Tintri/vmstore-csi-driver.git
 ```
 
 Edit `deploy/kubernetes/vmstore-csi-file-driver-config.yaml` file. Driver configuration example:
