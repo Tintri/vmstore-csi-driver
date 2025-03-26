@@ -20,7 +20,7 @@ vmstore_map:
     vmstoreFS: /tintri/csi
     # zone: zone-1
     username: admin
-    password: tintri99
+    password: <secret>
 
 
 debug: true                                                 # more logs
