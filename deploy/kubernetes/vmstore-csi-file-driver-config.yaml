@@ -11,7 +11,7 @@ vmstore_map:
   #   vmstoreFS: /tintri/testfs
   #   # zone: zone-1
   #   username: admin
-  #   password: Tintri99!
+  #   password: <secret>
 
   vmstore2:
     mountPoint: /tintri-csi                                     # mountpoint on the host where the tintri fs will be mounted
