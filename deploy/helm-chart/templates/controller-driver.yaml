@@ -1,18 +1,8 @@
-# This driver version works with Kubernetes version >=1.14
-#
-# In production, each CSI driver deployment has to be customized to avoid conflicts,
-# use non-default namespace and different names for non-namespaced entities like the ClusterRole
-#
-# Install to Kubernetes:
-# $ kubectl apply -f deploy/kubernetes/vmstore-csi-file-driver.yaml
-#
-
-
 # ----------------------
-# vmstore CSI Driver
+# Vmstore CSI Driver
 # ----------------------
 
-apiVersion: storage.k8s.io/v1 #k8s =>1.14
+apiVersion: storage.k8s.io/v1
 kind: CSIDriver
 metadata:
   name: vmstore.csi.tintri.com
@@ -21,19 +11,18 @@ spec:
   podInfoOnMount: false
 ---
 
-
 # ---------------------------------
-# vmstore CSI Controller Server
+# Vmstore CSI Controller Server
 # ---------------------------------
 #
-# Runs single driver controller server (driver + provisioner + attacher + snapshotter) on one of the nodes
+# Runs single driver controller server (driver + provisioner + snapshotter) on one of the nodes
 #
 
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: vmstore-csi-controller-service-account
-  namespace: default # replace with non-default namespace name if needed
+  namespace: {{ .Release.Namespace }}
 ---
 
 kind: ClusterRole
@@ -46,7 +35,7 @@ rules:
     verbs: ['get', 'list', "watch"]
   - apiGroups: ['']
     resources: ['persistentvolumes']
-    verbs: ['get', 'list', 'watch', 'create', 'update', 'delete'] # "update" for attacher
+    verbs: ['get', 'list', 'watch', 'create', 'update', 'delete']
   - apiGroups: ['']
     resources: ['persistentvolumeclaims']
     verbs: ['get', 'list', 'watch', 'update']
@@ -62,7 +51,6 @@ rules:
   - apiGroups: ['snapshot.storage.k8s.io']
     resources: ['volumesnapshotcontents']
     verbs: ['get', 'list']
-  # attacher specific
   - apiGroups: ['']
     resources: ['nodes', 'pods']
     verbs: ['get', 'list', 'watch']
@@ -107,7 +95,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: vmstore-csi-controller-service-account
-    namespace: default # replace with non-default namespace name if needed
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
   name: vmstore-csi-controller-cluster-role
@@ -149,7 +137,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: vmstore-csi-controller-service-account
-    namespace: default
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: ClusterRole
   name: csi-resizer-role
@@ -159,7 +147,7 @@ roleRef:
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  namespace: default
+  namespace: {{ .Release.Namespace }}
   name: external-resizer-cfg
 rules:
 - apiGroups: ["coordination.k8s.io"]
@@ -171,11 +159,11 @@ kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: csi-resizer-role-cfg
-  namespace: default
+  namespace: {{ .Release.Namespace }}
 subjects:
   - kind: ServiceAccount
     name: vmstore-csi-controller-service-account
-    namespace: default
+    namespace: {{ .Release.Namespace }}
 roleRef:
   kind: Role
   name: external-resizer-cfg
@@ -186,8 +174,8 @@ kind: Deployment
 apiVersion: apps/v1
 metadata:
   name: vmstore-csi-controller
+  namespace: {{ .Release.Namespace }}
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: vmstore-csi-controller # has to match .spec.template.metadata.labels
@@ -197,49 +185,89 @@ spec:
         app: vmstore-csi-controller
     spec:
       serviceAccount: vmstore-csi-controller-service-account
+      priorityClassName: {{ .Values.priorityClassName }}
       containers:
         # csi-provisioner: sidecar container that watches Kubernetes PersistentVolumeClaim objects
         # and triggers CreateVolume/DeleteVolume against a CSI endpoint
         - name: csi-provisioner
-          image: registry.k8s.io/sig-storage/csi-provisioner:v3.0.0
-          imagePullPolicy: IfNotPresent
+          resources: {{ .Values.resources | default .Values.provisioner.resources | toYaml | nindent 12 }}
+          image: {{ .Values.provisioner.repository }}:{{ .Values.provisioner.tag }}
+          imagePullPolicy: {{ .Values.provisioner.pullPolicy }}
           args:
             - --csi-address=/var/lib/csi/sockets/pluginproxy/csi.sock
-            - --volume-name-prefix=pvc-vmstore
+            - --volume-name-prefix={{ .Values.volumeNamePrefix }}
             - --strict-topology
             - --immediate-topology=false
             - --feature-gates=Topology=true
-            - --timeout=300s
-            - --retry-interval-start=10s
+            - --timeout={{ .Values.provisioner.timeout }}
             - --worker-threads=2
+          env:
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.memory
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.cpu
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy
         - name: csi-snapshotter
-          image: registry.k8s.io/sig-storage/csi-snapshotter:v6.3.2
-          imagePullPolicy: IfNotPresent
+          resources: {{ .Values.resources | default .Values.csi_snapshotter.resources | toYaml | nindent 12 }}
+          image: {{ .Values.csi_snapshotter.repository }}:{{ .Values.csi_snapshotter.tag }}
+          imagePullPolicy: {{ .Values.csi_snapshotter.pullPolicy }}
           args:
             - -v=3
             - --csi-address=/var/lib/csi/sockets/pluginproxy/csi.sock
+            - --timeout={{ .Values.csi_snapshotter.timeout }}
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy
+          env:
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.memory
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.cpu
         - name: csi-resizer
-          image: k8s.gcr.io/sig-storage/csi-resizer:v1.12.0
+          resources: {{ .Values.resources | default .Values.resizer.resources | toYaml | nindent 12 }}
+          image: {{ .Values.resizer.repository }}:{{ .Values.resizer.tag }}
+          imagePullPolicy: {{ .Values.resizer.pullPolicy }}
           args:
-            - --csi-address=/var/lib/csi/sockets/pluginproxy/csi.sock
-          imagePullPolicy: IfNotPresent
+            - "--csi-address=$(ADDRESS)"
+          env:
+            - name: ADDRESS
+              value: /var/lib/csi/sockets/pluginproxy/csi.sock
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.memory
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.cpu
           volumeMounts:
             - name: socket-dir
               mountPath: /var/lib/csi/sockets/pluginproxy/
         - name: driver
+          resources: {{ .Values.resources | default .Values.image.resources | toYaml | nindent 12 }}
           securityContext:
             privileged: true
             capabilities:
               add: ['SYS_ADMIN']
             allowPrivilegeEscalation: true
-          image: tintri/vmstore-csi-driver:v1.1.0
-          imagePullPolicy: Always
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
           args:
             - --nodeid=$(KUBE_NODE_NAME)
             - --endpoint=unix://csi/csi.sock
@@ -249,143 +277,33 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.memory
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.cpu
           volumeMounts:
             - name: socket-dir
               mountPath: /csi
             - name: secret
               mountPath: /config
               readOnly: true
+            - name: host
+              mountPath: /host
+              mountPropagation: Bidirectional
       volumes:
         - name: socket-dir
           emptyDir:
         - name: secret
           secret:
-            secretName: vmstore-csi-file-driver-config
-
----
-
-
-# ---------------------------
-# vmstore CSI Node Server
-# ---------------------------
-#
-# Runs driver node server (driver + registrar) on each node
-#
-
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: vmstore-csi-node-service-account
-  namespace: default # replace with non-default namespace name if needed
----
-
-kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: vmstore-csi-node-cluster-role
-rules:
-  - apiGroups: ['']
-    resources: ['events']
-    verbs: ['get', 'list', 'watch', 'create', 'update', 'patch']
-  - apiGroups: ['']
-    resources: ['nodes']
-    verbs: ['get']
----
-
-kind: ClusterRoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: vmstore-csi-node-cluster-role-binding
-subjects:
-  - kind: ServiceAccount
-    name: vmstore-csi-node-service-account
-    namespace: default # replace with non-default namespace name if needed
-roleRef:
-  kind: ClusterRole
-  name: vmstore-csi-node-cluster-role
-  apiGroup: rbac.authorization.k8s.io
----
-
-# vmstore Node Server as a daemon
-
-kind: DaemonSet
-apiVersion: apps/v1
-metadata:
-  name: vmstore-csi-node
-spec:
-  selector:
-    matchLabels:
-      app: vmstore-csi-node
-  template:
-    metadata:
-      labels:
-        app: vmstore-csi-node
-    spec:
-      serviceAccount: vmstore-csi-node-service-account
-      hostNetwork: true
-      containers:
-        - name: driver-registrar
-          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.5.1
-          imagePullPolicy: IfNotPresent
-          args:
-            - --v=3
-            - --csi-address=/csi/csi.sock
-            - --kubelet-registration-path=/var/lib/kubelet/plugins/vmstore.csi.tintri.com/csi.sock
-          env:
-            - name: KUBE_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
-            - name: registration-dir
-              mountPath: /registration
-        - name: driver
-          securityContext:
-            privileged: true
-            capabilities:
-              add: ['SYS_ADMIN']
-            allowPrivilegeEscalation: true
-          image: tintri/vmstore-csi-driver:v1.1.0
-          imagePullPolicy: Always
-          args:
-            - --nodeid=$(KUBE_NODE_NAME)
-            - --endpoint=unix://csi/csi.sock
-            - --role=node
-          env:
-            - name: KUBE_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-          volumeMounts:
-            - name: dev
-              mountPath: /dev
-            - name: socket-dir
-              mountPath: /csi
-            - name: secret
-              mountPath: /config
-            - name: pods-mount-dir
-              mountPath: /var/lib/kubelet/pods
-              mountPropagation: Bidirectional
-      volumes:
-        - name: dev
+            secretName: {{ .Values.secretName }}
+        - name: host
           hostPath:
-            path: /dev
+            path: /
             type: Directory
-        - name: socket-dir
-          hostPath:
-            path: /var/lib/kubelet/plugins/vmstore.csi.tintri.com
-            type: DirectoryOrCreate
-        - name: registration-dir
-          hostPath:
-            path: /var/lib/kubelet/plugins_registry/
-            type: Directory
-        - name: pods-mount-dir
-          hostPath:
-            path: /var/lib/kubelet/pods
-            type: Directory
-        - name: secret
-          secret:
-            secretName: vmstore-csi-file-driver-config
 ---
