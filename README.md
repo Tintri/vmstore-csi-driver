@@ -24,7 +24,7 @@ Releases can be found here - https://github.com/Tintri/vmstore-csi-driver/releas
 ## Compatibility matrix
 |CSI driver version| VMstore version|
 |--- |--- |
-|v1.0.1| >=5.6.0.1 |
+|>=v1.0.1| >=5.6.0.1 |
 
 ## Requirements
 
