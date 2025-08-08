@@ -1,0 +1,160 @@
+
+# ---------------------------
+# Vmstore CSI Node Server
+# ---------------------------
+#
+# Runs driver node server (driver + registrar) on each node
+#
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vmstore-csi-node-service-account
+  namespace: {{ .Release.Namespace }}
+---
+
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: vmstore-csi-node-cluster-role
+rules:
+  - apiGroups: ['']
+    resources: ['events']
+    verbs: ['get', 'list', 'watch', 'create', 'update', 'patch']
+  - apiGroups: ['']
+    resources: ['nodes']
+    verbs: ['get']
+---
+
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: vmstore-csi-node-cluster-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: vmstore-csi-node-service-account
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: vmstore-csi-node-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+
+# Vmstore Node Server as a daemon
+
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: vmstore-csi-node
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+      app: vmstore-csi-node
+  template:
+    metadata:
+      labels:
+        app: vmstore-csi-node
+    spec:
+      serviceAccount: vmstore-csi-node-service-account
+      priorityClassName: {{ .Values.priorityClassName }}
+      hostNetwork: true
+      containers:
+        # driver-registrar: sidecar container that:
+        # 1) registers the CSI driver with kubelet
+        # 2) adds the drivers custom NodeId to a label on the Kubernetes Node API Object
+        - name: driver-registrar
+          resources: {{ .Values.resources | default .Values.registrar.resources | toYaml | nindent 12 }}
+          image: {{ .Values.registrar.repository }}:{{ .Values.registrar.tag }}
+          imagePullPolicy: {{ .Values.registrar.pullPolicy }}
+          args:
+            - --v=5
+            - --csi-address=/csi/csi.sock
+            - --kubelet-registration-path=/var/lib/kubelet/plugins/vmstore.csi.tintri.com/csi.sock
+          livenessProbe:
+            exec:
+              command:
+              - /csi-node-driver-registrar
+              - --kubelet-registration-path=/var/lib/kubelet/plugins/vmstore.csi.tintri.com/csi.sock
+              - --mode=kubelet-registration-probe
+            initialDelaySeconds: 30
+            timeoutSeconds: 15
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.memory
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.cpu
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+        - name: driver
+          resources: {{ .Values.resources | default .Values.image.resources | toYaml | nindent 12 }}
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ['SYS_ADMIN']
+            allowPrivilegeEscalation: true
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: "{{ .Values.image.pullPolicy }}"
+          args:
+            - --nodeid=$(KUBE_NODE_NAME)
+            - --endpoint=unix://csi/csi.sock
+            - --role=node
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.memory
+            - name: GOMAXPROCS
+              valueFrom:
+                resourceFieldRef:
+                  divisor: "0"
+                  resource: limits.cpu
+          volumeMounts:
+            - name: dev
+              mountPath: /dev
+            - name: socket-dir
+              mountPath: /csi
+            - name: secret
+              mountPath: /config
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet/pods
+              mountPropagation: Bidirectional
+      volumes:
+        - name: dev
+          hostPath:
+            path: /dev
+            type: Directory
+        - name: socket-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/vmstore.csi.tintri.com
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry/
+            type: Directory
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory
+        - name: secret
+          secret:
+            secretName: {{ .Values.secretName }}
+---
