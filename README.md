@@ -24,7 +24,7 @@ Releases can be found here - https://github.com/Tintri/vmstore-csi-driver/releas
 ## Compatibility matrix
 |CSI driver version| VMstore version|
 |--- |--- |
-|v1.0.1| >=5.6.0.1 |
+|>=v1.0.1| >=5.6.0.1 |
 
 ## Requirements
 
@@ -45,7 +45,7 @@ git clone -b <driver version> https://github.com/Tintri/vmstore-csi-driver.git
 ```
 e.g:-
 ```bash
-git clone -b 1.0.1 https://github.com/Tintri/vmstore-csi-driver.git
+git clone -b 1.0.0 https://github.com/Tintri/vmstore-csi-driver.git
 ```
 
 Edit `deploy/kubernetes/vmstore-csi-file-driver-config.yaml` file. Driver configuration example:
@@ -124,7 +124,7 @@ kubectl delete -f examples/nginx-dynamic-volume.yaml
 
 ### Static (pre-provisioned) volumes
 
-The driver can use already existing Exasaler filesystem,
+The driver can use already existing Vmstore filesystem,
 in this case, _StorageClass_, _PersistentVolume_ and _PersistentVolumeClaim_ should be configured.
 
 #### _StorageClass_ configuration

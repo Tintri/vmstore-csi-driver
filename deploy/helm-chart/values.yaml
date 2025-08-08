@@ -1,0 +1,64 @@
+# Default values for exa-csi.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+volumeNamePrefix: "pvc-vmstore"
+
+image:
+  repository: "tintri/vmstore-csi-driver"
+  tag: v1.1.0
+  pullPolicy: "Always"
+  # Overrides the image tag whose default is the chart appVersion.
+  resources:
+
+registrar:
+  repository: registry.k8s.io/sig-storage/csi-node-driver-registrar
+  tag: v2.10.1
+  pullPolicy: IfNotPresent
+  resources:
+
+provisioner:
+  repository: registry.k8s.io/sig-storage/csi-provisioner
+  tag: v4.0.1
+  pullPolicy: IfNotPresent
+  timeout: 120m
+  resources:
+
+resizer:
+  repository: registry.k8s.io/sig-storage/csi-resizer
+  tag: v1.12.0
+  pullPolicy: IfNotPresent
+  resources:
+
+csi_snapshotter:
+  repository: registry.k8s.io/sig-storage/csi-snapshotter
+  tag: v6.3.2
+  pullPolicy: IfNotPresent
+  timeout: 120m
+  resources:
+
+# resources:
+#   limits:
+#     cpu: 512m
+#     memory: 512Mi
+#   requests:
+#     cpu: 512m
+#     memory: 512Mi
+
+priorityClassName: system-cluster-critical
+
+secretName: vmstore-csi-file-driver-config
+
+# vmstore driver specific config
+config:
+  vmstore_map:
+    vmstore2:
+      mountPoint: /tintri-csi                                     # mountpoint on the host where the tintri fs will be mounted
+      dataIp: 10.136.40.71
+      managementAddress: tafbm05.tintri.com
+      vmstoreFS: /tintri/csi
+      # zone: zone-1
+      username: admin
+      password: tintri99
+
+  debug: true                                                 # more logs

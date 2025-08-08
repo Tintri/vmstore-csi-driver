@@ -35,10 +35,10 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshotcontents"]
-    verbs: ["create", "get", "list", "watch", "update", "delete"]
+    verbs: ["create", "get", "list", "watch", "update", "delete", "patch"]
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots"]
-    verbs: ["get", "list", "watch", "update"]
+    verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: ["snapshot.storage.k8s.io"]
     resources: ["volumesnapshots/status"]
     verbs: ["update"]
@@ -111,7 +111,7 @@ spec:
       serviceAccount: snapshot-controller
       containers:
         - name: snapshot-controller
-          image: k8s.gcr.io/sig-storage/snapshot-controller:v4.0.0
+          image: k8s.gcr.io/sig-storage/snapshot-controller:v6.3.2
           args:
             - "--v=5"
             - "--leader-election=false"
